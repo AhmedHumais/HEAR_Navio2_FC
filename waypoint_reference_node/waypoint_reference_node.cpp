@@ -18,7 +18,7 @@ int main(int argc, char **argv){
                                                                                 "uav_control/set_path");
     ROSUnit* rosunit_g2i_position = ROSUnit_Factory_main.CreateROSUnit(ROSUnit_tx_rx_type::Subscriber, 
                                                                     ROSUnit_msg_type::ROSUnit_Point,
-                                                                    "global2inertial/position");
+                                                                    "/pos_horizon");
     ROSUnit* rosunit_waypoint_counter = ROSUnit_Factory_main.CreateROSUnit(ROSUnit_tx_rx_type::Publisher, 
                                                                     ROSUnit_msg_type::ROSUnit_Float,
                                                                     "waypoint_reference/counter");
