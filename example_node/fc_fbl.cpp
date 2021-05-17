@@ -235,7 +235,7 @@ int main(int argc, char** argv) {
     pose_provider->getPorts()[(int)ROSUnit_PoseProvider::ports_id::OP_3_BODY_RATE]->connect(demux_body_rate->getPorts()[(int)Demux3D::ports_id::IP_0_DATA]);
     demux_body_rate->getPorts()[(int)Demux3D::ports_id::OP_0_DATA]->connect(mux_e_roll->getPorts()[(int)Mux3D::ports_id::IP_1_DATA]);  
     demux_body_rate->getPorts()[(int)Demux3D::ports_id::OP_1_DATA]->connect(mux_e_pitch->getPorts()[(int)Mux3D::ports_id::IP_1_DATA]);  
-    demux_body_rate->getPorts()[(int)Demux3D::ports_id::OP_1_DATA]->connect(err_sum_yaw_rate->getPorts()[(int)Sum::ports_id::IP_1_DATA]);
+    demux_body_rate->getPorts()[(int)Demux3D::ports_id::OP_2_DATA]->connect(err_sum_yaw_rate->getPorts()[(int)Sum::ports_id::IP_1_DATA]);
 
     mux_e_roll->getPorts()[(int)Mux3D::ports_id::OP_0_DATA]->connect(PID_roll->getPorts()[(int)PIDController::ports_id::IP_0_DATA]);
     mux_e_pitch->getPorts()[(int)Mux3D::ports_id::OP_0_DATA]->connect(PID_pitch->getPorts()[(int)PIDController::ports_id::IP_0_DATA]);
