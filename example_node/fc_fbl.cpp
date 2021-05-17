@@ -82,6 +82,13 @@ int main(int argc, char** argv) {
     ROSUnit* ori_provider_pub = ROSUnit_Factory_main.CreateROSUnit(ROSUnit_tx_rx_type::Publisher, 
                                                                     ROSUnit_msg_type::ROSUnit_Point,
                                                                     "/providers/ori");                                                                
+    ROSUnit* xh_pub = ROSUnit_Factory_main.CreateROSUnit(ROSUnit_tx_rx_type::Publisher, 
+                                                                    ROSUnit_msg_type::ROSUnit_Point,
+                                                                    "/pos_horizon");                                                                
+    ROSUnit* rot_err_pub = ROSUnit_Factory_main.CreateROSUnit(ROSUnit_tx_rx_type::Publisher, 
+                                                                    ROSUnit_msg_type::ROSUnit_Point,
+                                                                    "/axis_angle_ref");                                                                
+
 
     // ROSUnit* mrft_pub_x = ROSUnit_Factory_main.CreateROSUnit(ROSUnit_tx_rx_type::Publisher, 
     //                                                                 ROSUnit_msg_type::ROSUnit_Float,
@@ -253,6 +260,8 @@ int main(int argc, char** argv) {
     pose_provider->getPorts()[(int)ROSUnit_PoseProvider::ports_id::OP_0_POS]->connect(pos_provider_pub->getPorts()[(int)ROSUnit_PointPub::ports_id::IP_0]);
     mux_prov_ori->getPorts()[(int)Mux3D::ports_id::OP_0_DATA]->connect(ori_provider_pub->getPorts()[(int)ROSUnit_PointPub::ports_id::IP_0]);    
 
+    fb_linearizer->getPorts()[(int)FbLinearizer::ports_id::OP_XH]->connect(xh_pub->getPorts()[(int)ROSUnit_PointPub::ports_id::IP_0]);
+    fb_linearizer->getPorts()[(int)FbLinearizer::ports_id::OP_ROT_ERROR]->connect(rot_err_pub->getPorts()[(int)ROSUnit_PointPub::ports_id::IP_0]);
     //*******************************************************************************************************************
     
     // ROS CONTROL OUTPUTS
