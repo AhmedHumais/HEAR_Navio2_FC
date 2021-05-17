@@ -82,6 +82,9 @@ int main(int argc, char** argv) {
     ROSUnit* ori_provider_pub = ROSUnit_Factory_main.CreateROSUnit(ROSUnit_tx_rx_type::Publisher, 
                                                                     ROSUnit_msg_type::ROSUnit_Point,
                                                                     "/providers/ori");                                                                
+    ROSUnit* yaw_provider_pub = ROSUnit_Factory_main.CreateROSUnit(ROSUnit_tx_rx_type::Publisher, 
+                                                                    ROSUnit_msg_type::ROSUnit_Point,
+                                                                    "/providers/yaw"); 
     ROSUnit* xh_pub = ROSUnit_Factory_main.CreateROSUnit(ROSUnit_tx_rx_type::Publisher, 
                                                                     ROSUnit_msg_type::ROSUnit_Point,
                                                                     "/pos_horizon");                                                                
@@ -262,6 +265,11 @@ int main(int argc, char** argv) {
 
     fb_linearizer->getPorts()[(int)FbLinearizer::ports_id::OP_XH]->connect(xh_pub->getPorts()[(int)ROSUnit_PointPub::ports_id::IP_0]);
     fb_linearizer->getPorts()[(int)FbLinearizer::ports_id::OP_ROT_ERROR]->connect(rot_err_pub->getPorts()[(int)ROSUnit_PointPub::ports_id::IP_0]);
+
+    auto mux_yaw_prov = new Mux3D();
+    demux_opti_ori->getPorts()[(int)Demux3D::ports_id::OP_2_DATA]->connect(mux_yaw_prov->getPorts()[(int)Mux3D::ports_id::IP_0_DATA]);
+    mux_yaw_prov->getPorts()[(int)Mux3D::ports_id::OP_0_DATA]->connect(yaw_provider_pub->getPorts()[(int)ROSUnit_PointPub::ports_id::IP_0]);
+
     //*******************************************************************************************************************
     
     // ROS CONTROL OUTPUTS
