@@ -1,0 +1,8 @@
+<launch> 
+  <node pkg="hear_navio_fc_example" type="waypoint_node" 
+  name="waypoint_node" output="screen"/> 
+  <node pkg="hear_navio_fc_example" type="waypoint_reference_node" 
+  name="waypoint_reference_node" output="screen"/> 
+  <node pkg="hear_navio_fc_example" type="fc_fbl_node" 
+  name="flight_controller" output="screen"/> 
+</launch> 
