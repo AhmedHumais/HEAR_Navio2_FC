@@ -54,3 +54,20 @@ target_link_libraries(esc_calib_node ${catkin_LIBRARIES})
 add_executable(mrft_rpz_node example_node/mrft_rpz_node.cpp)
 add_dependencies(mrft_rpz_node ${catkin_EXPORTED_TARGETS})
 target_link_libraries(mrft_rpz_node ${catkin_LIBRARIES})
+
+
+add_executable(filter_test_node example_node/filter_test.cpp)
+add_dependencies(filter_test_node ${catkin_EXPORTED_TARGETS})
+target_link_libraries(filter_test_node ${catkin_LIBRARIES})
+
+add_executable(poly_filter_test_node example_node/poly_filter_test.cpp)
+add_dependencies(poly_filter_test_node ${catkin_EXPORTED_TARGETS})
+target_link_libraries(poly_filter_test_node ${catkin_LIBRARIES})
+
+add_executable(fc_fbl_node example_node/fc_fbl.cpp)
+add_dependencies(fc_fbl_node ${catkin_EXPORTED_TARGETS})
+target_link_libraries(fc_fbl_node ${catkin_LIBRARIES})
+
+add_executable(waypoint_node example_node/waypoint_node.cpp)
+add_dependencies(waypoint_node ${catkin_EXPORTED_TARGETS})
+target_link_libraries(waypoint_node ${catkin_LIBRARIES})
