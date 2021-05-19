@@ -88,10 +88,15 @@ int main(int argc, char** argv) {
     ROSUnit* xh_pub = ROSUnit_Factory_main.CreateROSUnit(ROSUnit_tx_rx_type::Publisher, 
                                                                     ROSUnit_msg_type::ROSUnit_Point,
                                                                     "/pos_horizon");                                                                
+    ROSUnit* fhx_des_pub = ROSUnit_Factory_main.CreateROSUnit(ROSUnit_tx_rx_type::Publisher, 
+                                                                    ROSUnit_msg_type::ROSUnit_Point,
+                                                                    "/fhx_des");                                                                
     ROSUnit* rot_err_pub = ROSUnit_Factory_main.CreateROSUnit(ROSUnit_tx_rx_type::Publisher, 
                                                                     ROSUnit_msg_type::ROSUnit_Point,
                                                                     "/axis_angle_ref");                                                                
-
+    ROSUnit* uz_pub = ROSUnit_Factory_main.CreateROSUnit(ROSUnit_tx_rx_type::Publisher, 
+                                                                    ROSUnit_msg_type::ROSUnit_Float,
+                                                                    "/uz_thrust_command");                                                                
 
     // ROSUnit* mrft_pub_x = ROSUnit_Factory_main.CreateROSUnit(ROSUnit_tx_rx_type::Publisher, 
     //                                                                 ROSUnit_msg_type::ROSUnit_Float,
@@ -163,8 +168,10 @@ int main(int argc, char** argv) {
     
     auto demux_opti_ori = new Demux3D();
     auto demux_imu_ori = new Demux3D();
+    auto demux_x = new Demux3D();
     auto demux_xh = new Demux3D();
-    auto demux_x_ref = new Demux3D();
+    auto demux_xh_dot = new Demux3D();  
+    auto demux_xh_ref = new Demux3D();
     auto demux_rot_err = new Demux3D();
     auto demux_body_rate = new Demux3D();
     
@@ -174,6 +181,7 @@ int main(int argc, char** argv) {
     auto err_sum_z = new Sum(std::minus<float>());
     auto err_sum_yaw_rate = new Sum(std::minus<float>());
     
+    auto mux_x_dot = new Mux3D();
     auto mux_FH_des = new Mux3D();
     auto mux_e_xh = new Mux3D();
     auto mux_e_yh = new Mux3D();
@@ -188,9 +196,19 @@ int main(int argc, char** argv) {
     
     pose_provider->getPorts()[(int)ROSUnit_PoseProvider::OP_1_ORI_OPTI]->connect(demux_opti_ori->getPorts()[(int)Demux3D::ports_id::IP_0_DATA]);
     pose_provider->getPorts()[(int)ROSUnit_PoseProvider::OP_2_ORI_IMU]->connect(demux_imu_ori->getPorts()[(int)Demux3D::ports_id::IP_0_DATA]);
+    pose_provider->getPorts()[(int)ROSUnit_PoseProvider::ports_id::OP_0_POS]->connect(demux_x->getPorts()[(int)Demux3D::ports_id::IP_0_DATA]);
+
+    demux_x->getPorts()[(int)Demux3D::ports_id::OP_0_DATA]->connect(x_dot->getPorts()[(int)Differentiator::ports_id::IP_0_DATA]);
+    demux_x->getPorts()[(int)Demux3D::ports_id::OP_1_DATA]->connect(y_dot->getPorts()[(int)Differentiator::ports_id::IP_0_DATA]);
+    demux_x->getPorts()[(int)Demux3D::ports_id::OP_2_DATA]->connect(z_dot->getPorts()[(int)Differentiator::ports_id::IP_0_DATA]);
+
+    x_dot->getPorts()[(int)Differentiator::ports_id::OP_0_DATA]->connect(mux_x_dot->getPorts()[(int)Mux3D::ports_id::IP_0_DATA]);
+    y_dot->getPorts()[(int)Differentiator::ports_id::OP_0_DATA]->connect(mux_x_dot->getPorts()[(int)Mux3D::ports_id::IP_0_DATA]);
+    z_dot->getPorts()[(int)Differentiator::ports_id::OP_0_DATA]->connect(mux_x_dot->getPorts()[(int)Mux3D::ports_id::IP_0_DATA]);
 
     // connecting inputs of feedback linearizer
     pose_provider->getPorts()[(int)ROSUnit_PoseProvider::ports_id::OP_0_POS]->connect(fb_linearizer->getPorts()[(int)FbLinearizer::ports_id::IP_X]);
+    mux_x_dot->getPorts()[(int)Mux3D::ports_id::OP_0_DATA]->connect(fb_linearizer->getPorts()[(int)FbLinearizer::ports_id::IP_X_DOT]);
     demux_opti_ori->getPorts()[(int)Demux3D::ports_id::OP_2_DATA]->connect(fb_linearizer->getPorts()[(int)FbLinearizer::ports_id::IP_YAW]);
     demux_imu_ori->getPorts()[(int)Demux3D::ports_id::OP_0_DATA]->connect(fb_linearizer->getPorts()[(int)FbLinearizer::ports_id::IP_ROLL]);
     demux_imu_ori->getPorts()[(int)Demux3D::ports_id::OP_1_DATA]->connect(fb_linearizer->getPorts()[(int)FbLinearizer::ports_id::IP_PITCH]);
@@ -199,25 +217,22 @@ int main(int argc, char** argv) {
 
     //connecting outputs of feedback linearizer
     fb_linearizer->getPorts()[(int)FbLinearizer::ports_id::OP_XH]->connect(demux_xh->getPorts()[(int)Demux3D::ports_id::IP_0_DATA]);
+    fb_linearizer->getPorts()[(int)FbLinearizer::ports_id::OP_XH_DOT]->connect(demux_xh_dot->getPorts()[(int)Demux3D::ports_id::IP_0_DATA]);
 
-    demux_xh->getPorts()[(int)Demux3D::ports_id::OP_0_DATA]->connect(x_dot->getPorts()[(int)Differentiator::ports_id::IP_0_DATA]);
-    demux_xh->getPorts()[(int)Demux3D::ports_id::OP_1_DATA]->connect(y_dot->getPorts()[(int)Differentiator::ports_id::IP_0_DATA]);
-    demux_xh->getPorts()[(int)Demux3D::ports_id::OP_2_DATA]->connect(z_dot->getPorts()[(int)Differentiator::ports_id::IP_0_DATA]);
-
-    xh_ref->getPorts()[(int)ROSUnit_PointSub::ports_id::OP_0]->connect(demux_x_ref->getPorts()[(int)Demux3D::ports_id::IP_0_DATA]);
-    demux_x_ref->getPorts()[(int)Demux3D::ports_id::OP_0_DATA]->connect(err_sum_x->getPorts()[(int)Sum::ports_id::IP_0_DATA]);
-    demux_x_ref->getPorts()[(int)Demux3D::ports_id::OP_1_DATA]->connect(err_sum_y->getPorts()[(int)Sum::ports_id::IP_0_DATA]);
-    demux_x_ref->getPorts()[(int)Demux3D::ports_id::OP_2_DATA]->connect(err_sum_z->getPorts()[(int)Sum::ports_id::IP_0_DATA]);
+    xh_ref->getPorts()[(int)ROSUnit_PointSub::ports_id::OP_0]->connect(demux_xh_ref->getPorts()[(int)Demux3D::ports_id::IP_0_DATA]);
+    demux_xh_ref->getPorts()[(int)Demux3D::ports_id::OP_0_DATA]->connect(err_sum_x->getPorts()[(int)Sum::ports_id::IP_0_DATA]);
+    demux_xh_ref->getPorts()[(int)Demux3D::ports_id::OP_1_DATA]->connect(err_sum_y->getPorts()[(int)Sum::ports_id::IP_0_DATA]);
+    demux_xh_ref->getPorts()[(int)Demux3D::ports_id::OP_2_DATA]->connect(err_sum_z->getPorts()[(int)Sum::ports_id::IP_0_DATA]);
     demux_xh->getPorts()[(int)Demux3D::ports_id::OP_0_DATA]->connect(err_sum_x->getPorts()[(int)Sum::ports_id::IP_1_DATA]);
     demux_xh->getPorts()[(int)Demux3D::ports_id::OP_1_DATA]->connect(err_sum_y->getPorts()[(int)Sum::ports_id::IP_1_DATA]);
     demux_xh->getPorts()[(int)Demux3D::ports_id::OP_2_DATA]->connect(err_sum_z->getPorts()[(int)Sum::ports_id::IP_1_DATA]);
 
     err_sum_x->getPorts()[(int)Sum::ports_id::OP_0_DATA]->connect(mux_e_xh->getPorts()[(int)Mux3D::ports_id::IP_0_DATA]);
-    x_dot->getPorts()[(int)Differentiator::ports_id::OP_0_DATA]->connect(mux_e_xh->getPorts()[(int)Mux3D::ports_id::IP_1_DATA]);
+    demux_xh_dot->getPorts()[(int)Demux3D::ports_id::OP_0_DATA]->connect(mux_e_xh->getPorts()[(int)Mux3D::ports_id::IP_1_DATA]);
     err_sum_y->getPorts()[(int)Sum::ports_id::OP_0_DATA]->connect(mux_e_yh->getPorts()[(int)Mux3D::ports_id::IP_0_DATA]);
-    y_dot->getPorts()[(int)Differentiator::ports_id::OP_0_DATA]->connect(mux_e_yh->getPorts()[(int)Mux3D::ports_id::IP_1_DATA]);
+    demux_xh_dot->getPorts()[(int)Demux3D::ports_id::OP_1_DATA]->connect(mux_e_yh->getPorts()[(int)Mux3D::ports_id::IP_1_DATA]);
     err_sum_z->getPorts()[(int)Sum::ports_id::OP_0_DATA]->connect(mux_e_zh->getPorts()[(int)Mux3D::ports_id::IP_0_DATA]);
-    z_dot->getPorts()[(int)Differentiator::ports_id::OP_0_DATA]->connect(mux_e_zh->getPorts()[(int)Mux3D::ports_id::IP_1_DATA]);
+    demux_xh_dot->getPorts()[(int)Demux3D::ports_id::OP_2_DATA]->connect(mux_e_zh->getPorts()[(int)Mux3D::ports_id::IP_1_DATA]);
     
     mux_e_xh->getPorts()[(int)Mux3D::ports_id::OP_0_DATA]->connect(PID_x->getPorts()[(int)PIDController::ports_id::IP_0_DATA]);
     mux_e_yh->getPorts()[(int)Mux3D::ports_id::OP_0_DATA]->connect(PID_y->getPorts()[(int)PIDController::ports_id::IP_0_DATA]);
@@ -260,11 +275,14 @@ int main(int argc, char** argv) {
     demux_imu_ori->getPorts()[(int)Demux3D::ports_id::OP_1_DATA]->connect(mux_prov_ori->getPorts()[(int)Mux3D::ports_id::IP_1_DATA]);
     demux_opti_ori->getPorts()[(int)Demux3D::ports_id::OP_2_DATA]->connect(mux_prov_ori->getPorts()[(int)Mux3D::ports_id::IP_2_DATA]);
 
+    mux_FH_des->getPorts()[(int)Mux3D::ports_id::OP_0_DATA]->connect(fhx_des_pub->getPorts()[(int)ROSUnit_PointPub::ports_id::IP_0]);
+
     pose_provider->getPorts()[(int)ROSUnit_PoseProvider::ports_id::OP_0_POS]->connect(pos_provider_pub->getPorts()[(int)ROSUnit_PointPub::ports_id::IP_0]);
     mux_prov_ori->getPorts()[(int)Mux3D::ports_id::OP_0_DATA]->connect(ori_provider_pub->getPorts()[(int)ROSUnit_PointPub::ports_id::IP_0]);    
 
     fb_linearizer->getPorts()[(int)FbLinearizer::ports_id::OP_XH]->connect(xh_pub->getPorts()[(int)ROSUnit_PointPub::ports_id::IP_0]);
     fb_linearizer->getPorts()[(int)FbLinearizer::ports_id::OP_ROT_ERROR]->connect(rot_err_pub->getPorts()[(int)ROSUnit_PointPub::ports_id::IP_0]);
+    fb_linearizer->getPorts()[(int)FbLinearizer::ports_id::OP_Z_COMMAND]->connect(uz_pub->getPorts()[(int)ROSUnit_FloatPub::ports_id::IP_0]);
 
     auto mux_yaw_prov = new Mux3D();
     demux_opti_ori->getPorts()[(int)Demux3D::ports_id::OP_2_DATA]->connect(mux_yaw_prov->getPorts()[(int)Mux3D::ports_id::IP_0_DATA]);
@@ -273,8 +291,8 @@ int main(int argc, char** argv) {
     //*******************************************************************************************************************
     
     // ROS CONTROL OUTPUTS
-    PID_x->getPorts()[(int)Saturation::ports_id::OP_0_DATA]->connect(((Block*)myROSBroadcastData)->getPorts()[(int)ROSUnit_BroadcastData::ports_id::IP_0_X_OUTPUT]);
-    PID_y->getPorts()[(int)Saturation::ports_id::OP_0_DATA]->connect(((Block*)myROSBroadcastData)->getPorts()[(int)ROSUnit_BroadcastData::ports_id::IP_1_Y_OUTPUT]);
+    PID_x->getPorts()[(int)PIDController::ports_id::OP_0_DATA]->connect(((Block*)myROSBroadcastData)->getPorts()[(int)ROSUnit_BroadcastData::ports_id::IP_0_X_OUTPUT]);
+    PID_y->getPorts()[(int)PIDController::ports_id::OP_0_DATA]->connect(((Block*)myROSBroadcastData)->getPorts()[(int)ROSUnit_BroadcastData::ports_id::IP_1_Y_OUTPUT]);
     PID_z->getPorts()[(int)PIDController::ports_id::OP_0_DATA]->connect(((Block*)myROSBroadcastData)->getPorts()[(int)ROSUnit_BroadcastData::ports_id::IP_2_Z_OUTPUT]);
     PID_roll->getPorts()[(int)PIDController::ports_id::OP_0_DATA]->connect(((Block*)myROSBroadcastData)->getPorts()[(int)ROSUnit_BroadcastData::ports_id::IP_3_ROLL_OUTPUT]);
     PID_pitch->getPorts()[(int)PIDController::ports_id::OP_0_DATA]->connect(((Block*)myROSBroadcastData)->getPorts()[(int)ROSUnit_BroadcastData::ports_id::IP_4_PITCH_OUTPUT]);
