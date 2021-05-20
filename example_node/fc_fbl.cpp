@@ -45,6 +45,7 @@
 
 const int OPTI_FREQUENCY = 120;
 const int PWM_FREQUENCY = 200;
+const int BW_FILTER_CUTOFF = 40;
 const float SATURATION_VALUE_XY = 0.2617; 
 const float SATURATION_VALUE_YAW = 0.2617;
 const float SATURATION_VALUE_YAWRATE = 0.3;
@@ -94,6 +95,9 @@ int main(int argc, char** argv) {
     ROSUnit* rot_err_pub = ROSUnit_Factory_main.CreateROSUnit(ROSUnit_tx_rx_type::Publisher, 
                                                                     ROSUnit_msg_type::ROSUnit_Point,
                                                                     "/axis_angle_ref");                                                                
+    ROSUnit* filt_body_rate_pub = ROSUnit_Factory_main.CreateROSUnit(ROSUnit_tx_rx_type::Publisher, 
+                                                                    ROSUnit_msg_type::ROSUnit_Point,
+                                                                    "/filtered_body_rate");                                                                
     ROSUnit* uz_pub = ROSUnit_Factory_main.CreateROSUnit(ROSUnit_tx_rx_type::Publisher, 
                                                                     ROSUnit_msg_type::ROSUnit_Float,
                                                                     "/uz_thrust_command");                                                                
@@ -161,6 +165,10 @@ int main(int argc, char** argv) {
     
     //*******************************************************************************************************************
 
+    auto filter_wx = new ButterFilter_2nd(ButterFilter_2nd::BF_settings::N200C50);
+    auto filter_wy = new ButterFilter_2nd(ButterFilter_2nd::BF_settings::N200C50);
+    auto filter_wz = new ButterFilter_2nd(ButterFilter_2nd::BF_settings::N200C50);
+
     auto pose_provider = new ROSUnit_PoseProvider(nh);
     auto x_dot = new Differentiator(1./OPTI_FREQUENCY);
     auto y_dot = new Differentiator(1./OPTI_FREQUENCY);
@@ -203,8 +211,8 @@ int main(int argc, char** argv) {
     demux_x->getPorts()[(int)Demux3D::ports_id::OP_2_DATA]->connect(z_dot->getPorts()[(int)Differentiator::ports_id::IP_0_DATA]);
 
     x_dot->getPorts()[(int)Differentiator::ports_id::OP_0_DATA]->connect(mux_x_dot->getPorts()[(int)Mux3D::ports_id::IP_0_DATA]);
-    y_dot->getPorts()[(int)Differentiator::ports_id::OP_0_DATA]->connect(mux_x_dot->getPorts()[(int)Mux3D::ports_id::IP_0_DATA]);
-    z_dot->getPorts()[(int)Differentiator::ports_id::OP_0_DATA]->connect(mux_x_dot->getPorts()[(int)Mux3D::ports_id::IP_0_DATA]);
+    y_dot->getPorts()[(int)Differentiator::ports_id::OP_0_DATA]->connect(mux_x_dot->getPorts()[(int)Mux3D::ports_id::IP_1_DATA]);
+    z_dot->getPorts()[(int)Differentiator::ports_id::OP_0_DATA]->connect(mux_x_dot->getPorts()[(int)Mux3D::ports_id::IP_2_DATA]);
 
     // connecting inputs of feedback linearizer
     pose_provider->getPorts()[(int)ROSUnit_PoseProvider::ports_id::OP_0_POS]->connect(fb_linearizer->getPorts()[(int)FbLinearizer::ports_id::IP_X]);
@@ -251,9 +259,13 @@ int main(int argc, char** argv) {
     demux_rot_err->getPorts()[(int)Demux3D::ports_id::OP_2_DATA]->connect(mux_e_yaw->getPorts()[(int)Mux3D::ports_id::IP_0_DATA]);
 
     pose_provider->getPorts()[(int)ROSUnit_PoseProvider::ports_id::OP_3_BODY_RATE]->connect(demux_body_rate->getPorts()[(int)Demux3D::ports_id::IP_0_DATA]);
-    demux_body_rate->getPorts()[(int)Demux3D::ports_id::OP_0_DATA]->connect(mux_e_roll->getPorts()[(int)Mux3D::ports_id::IP_1_DATA]);  
-    demux_body_rate->getPorts()[(int)Demux3D::ports_id::OP_1_DATA]->connect(mux_e_pitch->getPorts()[(int)Mux3D::ports_id::IP_1_DATA]);  
-    demux_body_rate->getPorts()[(int)Demux3D::ports_id::OP_2_DATA]->connect(err_sum_yaw_rate->getPorts()[(int)Sum::ports_id::IP_1_DATA]);
+    demux_body_rate->getPorts()[(int)Demux3D::ports_id::OP_0_DATA]->connect(filter_wx->getPorts()[(int)ButterFilter_2nd::ports_id::IP_0_DATA]);
+    demux_body_rate->getPorts()[(int)Demux3D::ports_id::OP_1_DATA]->connect(filter_wy->getPorts()[(int)ButterFilter_2nd::ports_id::IP_0_DATA]);
+    demux_body_rate->getPorts()[(int)Demux3D::ports_id::OP_2_DATA]->connect(filter_wz->getPorts()[(int)ButterFilter_2nd::ports_id::IP_0_DATA]);
+
+    filter_wx->getPorts()[(int)ButterFilter_2nd::ports_id::OP_0_DATA]->connect(mux_e_roll->getPorts()[(int)Mux3D::ports_id::IP_1_DATA]);
+    filter_wy->getPorts()[(int)ButterFilter_2nd::ports_id::OP_0_DATA]->connect(mux_e_pitch->getPorts()[(int)Mux3D::ports_id::IP_1_DATA]);
+    filter_wz->getPorts()[(int)ButterFilter_2nd::ports_id::OP_0_DATA]->connect(err_sum_yaw_rate->getPorts()[(int)Sum::ports_id::IP_1_DATA]);
 
     mux_e_roll->getPorts()[(int)Mux3D::ports_id::OP_0_DATA]->connect(PID_roll->getPorts()[(int)PIDController::ports_id::IP_0_DATA]);
     mux_e_pitch->getPorts()[(int)Mux3D::ports_id::OP_0_DATA]->connect(PID_pitch->getPorts()[(int)PIDController::ports_id::IP_0_DATA]);
@@ -270,15 +282,23 @@ int main(int argc, char** argv) {
  
     // adding publishers
     auto mux_prov_ori = new Mux3D();
+    auto mux_filtered_body_rate = new Mux3D();
+
+    pose_provider->getPorts()[(int)ROSUnit_PoseProvider::ports_id::OP_0_POS]->connect(pos_provider_pub->getPorts()[(int)ROSUnit_PointPub::ports_id::IP_0]);
 
     demux_imu_ori->getPorts()[(int)Demux3D::ports_id::OP_0_DATA]->connect(mux_prov_ori->getPorts()[(int)Mux3D::ports_id::IP_0_DATA]);
     demux_imu_ori->getPorts()[(int)Demux3D::ports_id::OP_1_DATA]->connect(mux_prov_ori->getPorts()[(int)Mux3D::ports_id::IP_1_DATA]);
     demux_opti_ori->getPorts()[(int)Demux3D::ports_id::OP_2_DATA]->connect(mux_prov_ori->getPorts()[(int)Mux3D::ports_id::IP_2_DATA]);
 
-    mux_FH_des->getPorts()[(int)Mux3D::ports_id::OP_0_DATA]->connect(fhx_des_pub->getPorts()[(int)ROSUnit_PointPub::ports_id::IP_0]);
-
-    pose_provider->getPorts()[(int)ROSUnit_PoseProvider::ports_id::OP_0_POS]->connect(pos_provider_pub->getPorts()[(int)ROSUnit_PointPub::ports_id::IP_0]);
     mux_prov_ori->getPorts()[(int)Mux3D::ports_id::OP_0_DATA]->connect(ori_provider_pub->getPorts()[(int)ROSUnit_PointPub::ports_id::IP_0]);    
+
+    filter_wx->getPorts()[(int)ButterFilter_2nd::ports_id::OP_0_DATA]->connect(mux_filtered_body_rate->getPorts()[(int)Mux3D::ports_id::IP_0_DATA]);
+    filter_wy->getPorts()[(int)ButterFilter_2nd::ports_id::OP_0_DATA]->connect(mux_filtered_body_rate->getPorts()[(int)Mux3D::ports_id::IP_1_DATA]);
+    filter_wz->getPorts()[(int)ButterFilter_2nd::ports_id::OP_0_DATA]->connect(mux_filtered_body_rate->getPorts()[(int)Mux3D::ports_id::IP_2_DATA]);
+
+    mux_filtered_body_rate->getPorts()[(int)Mux3D::ports_id::OP_0_DATA]->connect(filt_body_rate_pub->getPorts()[(int)ROSUnit_PointPub::ports_id::IP_0]);
+
+    mux_FH_des->getPorts()[(int)Mux3D::ports_id::OP_0_DATA]->connect(fhx_des_pub->getPorts()[(int)ROSUnit_PointPub::ports_id::IP_0]);
 
     fb_linearizer->getPorts()[(int)FbLinearizer::ports_id::OP_XH]->connect(xh_pub->getPorts()[(int)ROSUnit_PointPub::ports_id::IP_0]);
     fb_linearizer->getPorts()[(int)FbLinearizer::ports_id::OP_ROT_ERROR]->connect(rot_err_pub->getPorts()[(int)ROSUnit_PointPub::ports_id::IP_0]);
