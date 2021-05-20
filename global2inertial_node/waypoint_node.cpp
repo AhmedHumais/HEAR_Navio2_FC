@@ -55,15 +55,14 @@ int main(int argc, char** argv) {
     while(ros::ok()){
         // tempo.tick();
 
-        // ros::spinOnce();
+        ros::spinOnce();
 
         // int gone = tempo.tockMicroSeconds();
         // if(gone > 5000) {
         //     // std::cout  << "FC over 5000: " << gone << "\n";
         // }
-        // rate.sleep();
-        ros::spin();
-
+        rate.sleep();
+        
     }
     return 0;
 
